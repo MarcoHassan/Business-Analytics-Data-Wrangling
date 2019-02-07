@@ -1,0 +1,511 @@
+---
+title: "Expedia Code - Marco Hassan - January 2019"
+output: html_notebook
+---
+
+============================
+Libraries and dataset import
+============================
+
+Libraries 
+```{r}
+library("readxl")
+library("sqldf")
+library("ggplot2")
+library("ggmap")
+library("rgeos")
+library("rworldmap")
+library("dplyr")
+```
+
+
+Import Dataset
+```{r}
+path = "~/Desktop/Expedia/Analytics Interview Question_mobile_interns (WIP).xlsx"
+
+data = read_excel(path, sheet = "Data")
+```
+
+
+=============
+Data cleaning
+=============
+
+Structure Data
+```{r}
+## str(data)
+```
+
+Split data by year and week 
+```{r}
+year_week <- strsplit(data$Week, split = "-")
+
+data <- data.frame(year = sapply(year_week, "[", 1), week = sapply(year_week, "[", 2), data[,-1]) ## where "[" extract function
+```
+
+
+Change Attribute Names to make clear and avoid syntax issues with SQL queries.
+```{r}
+colnames(data)[-1:-2] <- c("Mobile_Dummy", "Platform", "Region", "Origin","Window", "Destination", "Net_USD", "Net_Order")
+```
+
+
+Rename North America to avoid confusion
+```{r}
+data$Region <- replace(data$Region, data$Region %in% "NA", "NOAM")
+
+## Check other columns with unique -omitted-. The data are complete and there are no NA or missing values.
+```
+
+
+Create factor variables for grouping, plotting and analysis
+```{r}
+data_factor <- c("Mobile_Dummy", "Origin", "Region","Platform","Window")
+
+data[data_factor] <- lapply(data[data_factor], factor)
+
+remove(data_factor)
+```
+
+
+Check if all data different
+```{r}
+sqldf("SELECT *, COUNT(*) AS x
+       FROM data
+       GROUP BY Platform,year, Net_Order, Net_USD, Destination, Window, week, Origin
+       HAVING x > 1")
+```
+
+Option to re-run analysis filtering away all of the data where average spending per order > 10'000
+```{r}
+#View(data %>% filter(Net_Order != 0) %>% filter(abs(Net_USD)/Net_Order > 10*1000)) 
+
+data <- data %>% filter(Net_Order != 0) %>% filter(abs(Net_USD)/Net_Order < 10*1000)
+```
+
+======================
+Descriptive Statistics
+======================
+
+Count Observations by Origin
+```{r}
+descriptive <- sqldf("SELECT Region, COUNT(Region) as Num_Observation, SUM(Net_Order) as Num_Orders FROM data GROUP BY Region")
+
+## USA Twice as much the observations to be taken into account.
+```
+
+
+Average Number of Orders per Origin
+```{r}
+cbind(descriptive, Average_Orders = descriptive$Num_Orders/descriptive$Num_Observation) %>% 
+  select(-c(Num_Observation, Num_Orders))
+
+## Even more skewed. This will drive the results in the subsequent analysis.
+
+## Possibly data already aggregated or just for business segment in the USA. Average orders are too big.
+
+remove(descriptive)
+```
+
+
+
+Distribution of Expanditures
+```{r}
+ggplot(data, aes(x = Region, y = Net_USD)) +
+  geom_boxplot() + 
+  xlab("Regions") + ylab("Net USD") +
+  ggtitle("Boxplot net USD expanditures by region for mobile Users") +
+  theme_bw()## very skewed distribution
+
+## few observations of extreme high value
+```
+
+
+Expenditures by Region
+```{r}
+sqldf("SELECT Region, avg(Net_USD) as avg_USD
+      FROM data
+      GROUP BY Region 
+      ORDER BY avg_USD DESC")
+```
+
+
+Cancelled Bookings
+```{r}
+sqldf("SELECT Region, avg(Net_USD) as Avg_Cancelled FROM data 
+      WHERE Net_USD <0 GROUP BY Region ORDER BY Avg_Cancelled ASC") ## Consistent with average value of books
+
+## APAC people seem to cancel less orders as they book on average in four weeks in worth of 32'000 USD and cancel 1500, just the double of the other region where the net orders are 1/4th.
+```
+
+
+Share of buyings Platforms by region
+```{r}
+data2 <- sqldf("SELECT year, Platform, Region, SUM(Net_Order) as Num_Order FROM data 
+               GROUP BY Region, Platform, year")
+
+data2 <- sqldf("SELECT *
+                FROM data2
+                LEFT JOIN (SELECT Region, year, SUM(Net_Order) as Total_Orders 
+                           FROM data 
+                           GROUP BY Region, year) AS data3
+                ON data2.year = data3.year AND data2.Region = data3.Region")
+  
+
+data2 <-cbind(data2,
+      Share_Orders = round((data2$Num_Order/data2$Total_Orders)*100,2)) %>%
+      select(year, Platform, Region, Share_Orders)
+
+data2
+```
+
+
+Plot growth rates
+```{r}
+ggplot(data2, aes(x=year, y= Share_Orders, group = factor(Region), 
+                  colour=Region, shape=Region)) + geom_line(size = 1)  +
+       facet_wrap(~Platform) + theme_bw()
+
+remove(data2)
+```
+
+===========
+More exotic options with low aggregated USD value seem to be prefered by mobiles in comparison to high aggregated values where Desktop domins
+===========
+
+
+```{r}
+data$USD_factor <- cut(data$Net_USD, c(-10^10, 0, 1000, 10000, 100000, 10^6, 10^20))
+
+levels(data$USD_factor) <- c("Cancellations", "(0-1000)", "(1000-10000)", "(10000 - 0.1 Mio.)", "(0.1-1 Mio.)", ">1 Mio.")
+
+data2 <- sqldf("SELECT * FROM data 
+             WHERE Region IN ('NOAM')
+             AND USD_factor NOT IN ('(0.1-1 Mio.)', '>1 Mio.')")
+
+ggplot(data2, 
+      aes(x = USD_factor)) +
+      geom_histogram(aes(fill = Mobile_Dummy), stat="count") +
+      scale_fill_brewer(palette = "Reds")+ ggtitle("Obeservations per interval")+ 
+      facet_wrap(~year, nrow=2)+ theme(axis.text.x=element_blank(),
+                                   axis.ticks.x=element_blank())+
+      theme_bw() 
+
+remove(data2)
+
+
+data2 <- sqldf("SELECT * FROM data 
+             WHERE Region IN ('NOAM')
+             AND USD_factor IN ('(0.1-1 Mio.)', '>1 Mio.')")
+
+ggplot(data2, 
+      aes(x = USD_factor)) +
+      geom_histogram(aes(fill = Mobile_Dummy), stat="count") +
+      scale_fill_brewer(palette = "Reds")+ ggtitle("Obeservations per interval")+ 
+      facet_wrap(~year, nrow=2)+ theme(axis.text.x=element_blank(),
+                                   axis.ticks.x=element_blank())+
+      theme_bw() 
+
+remove(data2)
+```
+
+
+===
+Times Series Trend
+===
+
+For 2016 - check for seasonality
+```{r}
+data_16 <- sqldf("SELECT *
+                  FROM data WHERE year = '2016' 
+                  AND Origin NOT IN ('US')")
+
+data_17 <- sqldf("SELECT *
+                  FROM data WHERE year = '2017' 
+                  AND Origin NOT IN ('US')")
+
+ggplot(data_16%>% filter(Region == "APAC"), aes(x = week, y= Net_USD)) +
+  geom_point(aes(color = Platform),alpha = 0.5) + 
+  ggtitle("The APAC Case") + theme_bw()
+
+ggplot(data_17, aes(x = week, y= Net_USD)) + 
+  geom_point(aes(color = Platform), alpha = 0.5) + 
+  facet_wrap(~Region) + ggtitle("2017 bookings by week") + 
+  theme_bw()
+
+## Something clearly happened in 2016 with exposive mobile app booking in week 45.
+## Plot just the two for the presentation
+ggplot(sqldf("SELECT * FROM data WHERE Region IN ('APAC')"), 
+       aes(x = as.numeric(week), y= Net_USD)) + 
+  geom_bar(stat = "identity",aes(fill = Platform), alpha = 0.5) + 
+  facet_wrap(~year) + xlab("Week") + ylab("USD spendings") + 
+  ggtitle("APAC bookings") + theme_bw()
+
+## Plots for USA
+ggplot(sqldf("SELECT * FROM data WHERE Origin IN ('US')"), 
+       aes(x = as.numeric(week), y= Net_USD)) + 
+  geom_point(aes(color = Platform), alpha = 0.5) + 
+  facet_wrap(~year)+ ggtitle("USA bookings") + 
+  xlab("Week") + theme_bw()
+
+## Also for other countries there is the net distinction Desktop vs. Mobile for different transaction types.
+
+remove(data_16)
+remove(data_17)
+```
+
+
+APAC Analysis
+```{r}
+sqldf("SELECT * FROM data 
+      WHERE year = '2016' 
+      AND Net_USD > 500000 
+      AND Region = 'APAC'
+      AND Platform = 'Mobile App'
+      ORDER BY Net_USD DESC") ## --> Promotion from australia to australia for luxury stayings for all of the windows. Boom especilly for short term options.
+```
+
+
+============
+Windows lags
+============
+
+```{r}
+data2 <- data %>% filter(Platform != "Desktop", Region != "NOAM")
+
+levels(data2$Window) <- c("0-1", "2-3", "4-7", "8-14", "15-30", "31-45", "46-60", "61-90", "+90", "Post")
+
+ggplot(data2, aes(x = Window, y = Net_USD)) + 
+  geom_bar(stat = "identity", fill = "lightblue", alpha = 0.8) + 
+  facet_wrap(~Platform+year)+ coord_flip()+ ylab("USD net expenses") +
+  ggtitle("Distribution of Expenses per Window Group without USA")+ theme_bw() 
+
+remove(data2)
+```
+
+
+Check Cancellation by break
+```{r}
+data2 <- data %>% filter(Platform != "Desktop")
+
+levels(data2$Window) <- c("0-1", "2-3", "4-7", "8-14", "15-30", "31-45", "46-60", "61-90", "+90", "Post")
+
+ggplot(data2 %>% filter(Net_USD < 0), aes(x = Window, y = Net_USD)) + 
+  geom_bar(stat = "identity", fill = "lightblue",alpha = 0.8) + 
+  facet_wrap(~Platform+year)+ coord_flip()+ ylab("USD net expenses") +
+  ggtitle("Distribution Cancellation per Window Group")+ theme_bw()
+
+ggplot(data2 %>% filter(Net_USD < 0, Region != "NOAM"), aes(x = Window, y = Net_USD)) +
+  geom_bar(stat = "identity", fill = "lightblue",alpha = 0.8) + 
+  facet_wrap(~Platform+year) + coord_flip()+ ylab("USD net expenses") +
+  ggtitle("Distribution Cancellation per Window Group")+ theme_bw()
+
+remove(data2)
+```
+
+
+=====================
+Check New year effect
+=====================
+
+```{r}
+
+data2 <- sqldf("SELECT week,Mobile_Dummy, Window, SUM(Net_USD) as Num_USD FROM data 
+               GROUP BY week, Window")
+
+data2 <- left_join(data2, sqldf("SELECT week, SUM(Net_USD) as Total_USD FROM data GROUP BY week"), by = "week") ## to save time used dplyr.
+
+data2 <-cbind(data2,
+              Share_USD = round((data2$Num_USD/data2$Total_USD)*100,2)) %>%
+        select(-c(Num_USD, Total_USD))
+
+levels(data2$Window) <- c("0-1", "2-3", "4-7", "8-14", "15-30", "31-45", "46-60", "61-90", "+90", "Post")
+
+ggplot(data2 %>% filter(Window != "Post", Mobile_Dummy == "Mobile"),
+       aes(x=Window, y=Share_USD)) +   
+       geom_linerange(aes(ymin = 0, ymax = Share_USD), color = "lightblue",
+                      size = 5) + facet_wrap(~week) +
+       ylab("Share Net Orders") + coord_flip() +
+       ggtitle("Share USD of bookings per Interval for Mobile Users") + theme_bw()
+
+## No december effect. Biggest is always 2-3 days and not too many bookings for end december period.
+
+remove(data2) 
+```
+
+
+====
+Map distribution
+====
+
+Use map_data to get a world map where to plot
+```{r}
+map_world <- map_data('world')
+
+## Check by anti join if there are unmatched countries in the two datasets
+#sqldf("SELECT Destination 
+      #FROM destination_expense
+      #WHERE Destination NOT IN (SELECT region FROM map_world)")
+
+## Check how big average expenses in such countries
+#sqldf("SELECT Destination, AvgUSD 
+#      FROM destination_expense
+#      WHERE Destination NOT IN (SELECT region FROM map_world)
+#     ORDER BY AvgUSD DESC")
+
+## Rename obvious and largest ones. Drop the others for convenience here.
+data <- sqldf(c("UPDATE data
+      SET Destination = CASE 
+                            WHEN Destination = 'United States of America'  THEN   'USA'
+                            WHEN Destination = 'United Kingdom'            THEN   'UK' 
+                            WHEN Destination = 'Spain & Canary Islands'    THEN   'Spain' 
+                            WHEN Destination = 'Taiwan, Republic of China' THEN   'Taiwan' 
+                        END
+      WHERE Destination IN ('United Kingdom', 'Spain & Canary Islands',
+                            'United States of America', 'Taiwan, Republic of China')", 
+      "SELECT * FROM main.data"))
+```
+
+
+Get Coordinates of the countries to plot. 
+```{r}
+## Extract Coordinates by Country
+wmap <- getMap(resolution="high")
+
+# get centroids
+centroids <- gCentroid(wmap, byid=TRUE)
+ 
+# get a data.frame with centroids
+df <- as.data.frame(centroids)
+
+df <- cbind(rownames(df), df); colnames(df)[1] <- "Country"
+
+## Check by anti join if there are unmatched countries in the two datasets
+#sqldf("SELECT Destination FROM destination_expense
+      #WHERE Destination NOT IN (SELECT Country FROM df)") ## no coordinates for those
+
+## Get Coordinates
+data$Longitude <- NA
+data$Latitude <- NA
+
+data$Longitude <- df[data$Destination, 2]
+data$Latitude <- df[data$Destination, 3]
+```
+
+
+Create aggregate statistics by Destination Country
+```{r}
+destination_expense <- sqldf("SELECT Destination, SUM(Net_Order) as SumOrder, 
+                             avg(Net_USD) as AvgUSD 
+                             FROM data 
+                             WHERE Region == 'NOAM' 
+                             AND Mobile_Dummy = 'Mobile' 
+                             AND Window == '2-3 days' 
+                             GROUP BY Destination")
+```
+
+
+Join Datasets
+```{r}
+destination_expense <- sqldf("SELECT * 
+                             FROM map_world
+                             LEFT JOIN destination_expense
+                             ON map_world.region = destination_expense.Destination")
+```
+
+
+Plot using logarithm as otherwise all the color scale dominated by USA
+```{r}
+ggplot(destination_expense, aes(x = long, y = lat, group = group)) +
+  ggtitle("Log Sum Orders per Destination")+
+  geom_polygon(aes(fill = log(SumOrder))) + theme_bw()
+```
+
+
+Plot just for high share
+```{r}
+#destination_expense <- sqldf(c("UPDATE destination_expense
+#                                SET AvgUSD = 'NA'
+#                                WHERE LOG(AvgUSD) < 8", 
+#                                "SELECT * FROM main.destination_expense")) --> sqldf does not support log
+
+destination_expense <- data %>% filter(Mobile_Dummy == "Mobile",
+                                       Region == "NOAM", Mobile_Dummy == 'Mobile',
+                                       Window == "2-3 days")      %>% 
+                                group_by(Destination)             %>% 
+                                mutate(Median_USD = median(Net_USD), 
+                                       AvgUSD = mean(Net_USD),
+                                       SumOrder = sum(Net_Order)) %>%
+                                filter(log(SumOrder)>5.5)         %>% 
+                                select(-Net_USD)
+
+destination_expense <- sqldf("SELECT * 
+                             FROM destination_expense 
+                             GROUP BY Destination")
+
+destination_expense <- sqldf("SELECT * 
+                             FROM map_world
+                             LEFT JOIN destination_expense
+                             ON map_world.region = destination_expense.Destination")
+
+ggplot(destination_expense, aes(x = long, y = lat, group = group)) +
+  ggtitle("Head Log Sum Orders in each Destination")+
+  geom_polygon(aes(fill = log(SumOrder))) + theme_bw()
+```
+
+
+===
+Others 
+===
+
+
+In this section I'll try with the same procedure as before to check if small investments are rather addressed to exotic countries. 
+```{r}
+## Use dplyr data wrangling to add both median and average to save time.
+destination_expense <- data %>% filter(Mobile_Dummy == "Mobile", Region != "NOAM") %>%
+                                group_by(Destination)                              %>% 
+                                mutate(Median_USD = median(Net_USD), 
+                                       AvgUSD = mean(Net_USD),
+                                       SumOrder = sum(Net_Order))                  %>%
+                                select(-Net_USD)
+
+destination_expense <- sqldf("SELECT * FROM destination_expense GROUP BY Destination")
+
+destination_expense <- sqldf("SELECT * 
+                             FROM map_world
+                             LEFT JOIN destination_expense
+                             ON map_world.region = destination_expense.Destination")
+
+## Checking at Orders
+ggplot(destination_expense, aes(x = long, y = lat, group = group)) +
+  ggtitle("Log Sum Orders in each Destination")+ 
+  geom_polygon(aes(fill = log(SumOrder))) + theme_bw()
+```
+
+
+Logarithm higher than 6
+```{r}
+destination_expense <- data %>% filter(Mobile_Dummy == "Mobile", 
+                                       Region != "NOAM", 
+                                       Mobile_Dummy == 'Mobile')     %>% 
+                                group_by(Destination)                %>% 
+                                mutate(Median_USD = median(Net_USD), 
+                                       AvgUSD = mean(Net_USD),
+                                       SumOrder = sum(Net_Order))    %>%
+                                filter(log(SumOrder)>6)              %>%
+                                select(-Net_USD)
+
+destination_expense <- sqldf("SELECT * FROM destination_expense GROUP BY Destination")
+
+destination_expense <- sqldf("SELECT * 
+                             FROM map_world
+                             LEFT JOIN destination_expense
+                             ON map_world.region = destination_expense.Destination")
+
+ggplot(destination_expense, aes(x = long, y = lat, group = group)) +
+  ggtitle("Head Log Sum Orders in each Destination")+
+  geom_polygon(aes(fill = log(SumOrder))) + theme_bw()
+```
+
+
+
