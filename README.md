@@ -6,7 +6,7 @@ Moreover the code contains the mapping of the descriptive statistics of orders b
 
 In order to do that I downloaded the merchator map and get to the coordinates of each country through the rworldmap rgeos packages.
 
-The result is a set of coordinates and a map on which it is possible to plot any kind of descriptive statistics filtering it by value.
+The result is a set of coordinates and a map on which it is possible to plot any kind of descriptive statistics.
 
 # Mapping example of the logarithm of the orders statistics
 
