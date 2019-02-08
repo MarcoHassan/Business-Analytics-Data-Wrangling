@@ -8,6 +8,6 @@ In order to do that I downloaded the merchator map and get to the coordinates of
 
 The result is a set of coordinates and a map on which it is possible to plot any kind of descriptive statistics.
 
-# Mapping example of the logarithm of the orders statistics
+# Mapping example
 
 ![image](https://user-images.githubusercontent.com/42472072/52440030-c4613500-2b25-11e9-8b1e-ba8d95066815.png)
