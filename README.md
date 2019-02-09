@@ -1,6 +1,8 @@
 # Business Analytics Project
 
-This code was operated on a vast dataset of aggregated data. The code abstract from statistical evalutation and focuses on descriptive statistics, data wrangling through SQL and dplyr queries.
+This code was operated on a vast dataset of aggregated data. The code abstract from statistical evalutation and focuses on descriptive statistics, data wrangling through **SQL and dplyr queries**.
+
+SQL queries were integrated in the R code through the 
 
 Moreover the code contains the mapping of the descriptive statistics of orders by country plotted on the classical merchator map.
 
