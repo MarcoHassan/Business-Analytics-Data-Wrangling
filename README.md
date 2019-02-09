@@ -2,13 +2,13 @@
 
 This code was operated on a vast dataset of aggregated data. The code abstract from statistical evalutation and focuses on descriptive statistics, data wrangling through **SQL and dplyr queries**.
 
-SQL queries were integrated in the R code through the 
+SQL queries were integrated in the R code through the **sqldf package** that allows to make use of sql queries to operate on data frames in R. Important to notice, is the difference with the **DBI package**. Where the latter offers the option to connect to RDMS the first just allows to run SQL queries on local mode.
 
 Moreover the code contains the mapping of the descriptive statistics of orders by country plotted on the classical merchator map.
 
-In order to do that I downloaded the merchator map and get to the coordinates of each country through the rworldmap rgeos packages.
+### Strategy
 
-The result is a set of coordinates and a map on which it is possible to plot any kind of descriptive statistics.
+In order to do that I downloaded the merchator map and the country specific centroid coordinates through the **getMap** function of the **rworldmap** package. I joined the new obtained dataset with the dataset of interest based of the country code having an integrated dataset from which I could plot descriptive statistics of internet on the merchator map downloaded in the rworldmap package.
 
 ### Mapping example
 
