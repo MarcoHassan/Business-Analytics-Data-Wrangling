@@ -4,7 +4,7 @@ This code was operated on a vast dataset of aggregated data. The code abstract f
 
 SQL queries were integrated in the R code through the **sqldf package** that allows to make use of sql queries to operate on data frames in R. Important to notice, is the difference with the **DBI package**. Where the latter offers the option to connect to RDMS the first just allows to run SQL queries on local mode.
 
-Moreover the code contains the mapping of the descriptive statistics of orders by country plotted on the classical merchator map.
+Moreover the code contains the mapping of the descriptive statistics by country plotted on the classical merchator map.
 
 ### Strategy
 
