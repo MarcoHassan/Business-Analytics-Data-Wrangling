@@ -8,7 +8,7 @@ Moreover the code contains the mapping of the descriptive statistics by country 
 
 ### Mapping Strategy
 
-In order to do that I downloaded the merchator map and the country specific centroid coordinates through the **getMap** function of the **rworldmap** package. I joined the new obtained dataset with the dataset of interest based of the country code having an integrated dataset from which I could plot descriptive statistics of internet on the merchator map from the rworldmap package.
+In order to do that I downloaded the merchator map and the country specific centroid coordinates through the **getMap** function of the **rworldmap** package. I joined the new obtained dataset with the dataset of interest based of the country code. This result in an integrated dataset from which I could plot descriptive statistics of interest on the merchator map.
 
 ### Mapping example
 
