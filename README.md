@@ -1,6 +1,6 @@
 # Business Analytics Project
 
-This code was operated on a vast dataset of aggregated data. The code abstract from statistical evalutation and focuses on descriptive statistics, data wrangling through **SQL and dplyr queries**.
+This code was operated on a dataset of aggregated data. The code abstract from statistical evalutation and focuses on descriptive statistics, data wrangling through **SQL and dplyr queries**.
 
 SQL queries were integrated in the R code through the **sqldf package** that allows to make use of sql queries to operate on data frames in R. Important to notice, is the difference with the **DBI package**. Where the latter offers the option to connect to RDMS the first just allows to run SQL queries on local mode.
 
